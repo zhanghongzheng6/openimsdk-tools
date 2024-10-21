@@ -29,6 +29,11 @@ func Check(ctx context.Context, config *Config) error {
 	}
 
 	clientOpts := options.Client().ApplyURI(config.Uri)
+	if config.Tls {
+		tlsConfig, _ := getTLSConfig(config.CertPath)
+		clientOpts.SetTLSConfig(tlsConfig)
+	}
+
 	mongoClient, err := mongo.Connect(ctx, clientOpts)
 	if err != nil {
 		return errs.WrapMsg(err, "MongoDB connect failed", "URI", config.Uri, "Database", config.Database, "MaxPoolSize", config.MaxPoolSize)

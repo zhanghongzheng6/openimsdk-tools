@@ -32,7 +32,12 @@ func buildMongoURI(config *Config) string {
 	if config.Username != "" && config.Password != "" {
 		credentials = fmt.Sprintf("%s:%s@", config.Username, config.Password)
 	}
-	return fmt.Sprintf("mongodb://%s%s/%s?maxPoolSize=%d", credentials, strings.Join(config.Address, ","), config.Database, config.MaxPoolSize)
+	tlsStr := "false"
+	if config.Tls {
+		tlsStr = "true"
+	}
+
+	return fmt.Sprintf("mongodb://%s%s/%s?maxPoolSize=%d&tls=%s", credentials, strings.Join(config.Address, ","), config.Database, config.MaxPoolSize, tlsStr)
 }
 
 // shouldRetry determines whether an error should trigger a retry.

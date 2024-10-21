@@ -16,6 +16,9 @@ package mongoutil
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"os"
 	"time"
 
 	"github.com/openimsdk/tools/db/tx"
@@ -40,6 +43,8 @@ type Config struct {
 	Password    string
 	MaxPoolSize int
 	MaxRetry    int
+	Tls         bool
+	CertPath    string
 }
 
 type Client struct {
@@ -60,7 +65,12 @@ func NewMongoDB(ctx context.Context, config *Config) (*Client, error) {
 	if err := config.ValidateAndSetDefaults(); err != nil {
 		return nil, err
 	}
+
 	opts := options.Client().ApplyURI(config.Uri).SetMaxPoolSize(uint64(config.MaxPoolSize))
+	if config.Tls {
+		tlsConfig, _ := getTLSConfig(config.CertPath)
+		opts.SetTLSConfig(tlsConfig)
+	}
 	var (
 		cli *mongo.Client
 		err error
@@ -95,4 +105,21 @@ func connectMongo(ctx context.Context, opts *options.ClientOptions) (*mongo.Clie
 		return nil, err
 	}
 	return cli, nil
+}
+
+func getTLSConfig(certPath string) (*tls.Config, error) {
+	tlsConfig := new(tls.Config)
+	certs, err := os.ReadFile(certPath)
+	if err != nil {
+		return tlsConfig, err
+	}
+
+	tlsConfig.RootCAs = x509.NewCertPool()
+	ok := tlsConfig.RootCAs.AppendCertsFromPEM(certs)
+
+	if !ok {
+		return nil, nil
+	}
+
+	return tlsConfig, nil
 }
