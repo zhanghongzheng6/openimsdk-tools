@@ -43,8 +43,12 @@ type Config struct {
 	Password    string
 	MaxPoolSize int
 	MaxRetry    int
-	Tls         bool
-	CertPath    string
+	TLS         TLSConfig `yaml:"tls"`
+}
+
+type TLSConfig struct {
+	EnableTLS bool   `yaml:"enableTLS"`
+	CACrt     string `yaml:"caCrt"`
 }
 
 type Client struct {
@@ -67,8 +71,8 @@ func NewMongoDB(ctx context.Context, config *Config) (*Client, error) {
 	}
 
 	opts := options.Client().ApplyURI(config.Uri).SetMaxPoolSize(uint64(config.MaxPoolSize))
-	if config.Tls {
-		tlsConfig, _ := getTLSConfig(config.CertPath)
+	if config.TLS.EnableTLS {
+		tlsConfig, _ := getTLSConfig(config.TLS.CACrt)
 		opts.SetTLSConfig(tlsConfig)
 	}
 	var (

@@ -29,8 +29,8 @@ func Check(ctx context.Context, config *Config) error {
 	}
 
 	clientOpts := options.Client().ApplyURI(config.Uri)
-	if config.Tls {
-		tlsConfig, _ := getTLSConfig(config.CertPath)
+	if config.TLS.EnableTLS {
+		tlsConfig, _ := getTLSConfig(config.TLS.CACrt)
 		clientOpts.SetTLSConfig(tlsConfig)
 	}
 

@@ -33,7 +33,7 @@ func buildMongoURI(config *Config) string {
 		credentials = fmt.Sprintf("%s:%s@", config.Username, config.Password)
 	}
 	tlsStr := "false"
-	if config.Tls {
+	if config.TLS.EnableTLS {
 		tlsStr = "true"
 	}
 
