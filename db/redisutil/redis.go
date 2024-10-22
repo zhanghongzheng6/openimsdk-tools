@@ -31,7 +31,7 @@ type Config struct {
 	MaxRetry    int      // Maximum number of retries for a command.
 	DB          int      // Database number to connect to, for non-cluster mode.
 	PoolSize    int      // Number of connections to pool.
-	SkipTls     bool
+	Tls         bool
 }
 
 func NewRedisClient(ctx context.Context, config *Config) (redis.UniversalClient, error) {
@@ -47,6 +47,11 @@ func NewRedisClient(ctx context.Context, config *Config) (redis.UniversalClient,
 			PoolSize:   config.PoolSize,
 			MaxRetries: config.MaxRetry,
 		}
+		if config.Tls {
+			opt.TLSConfig = &tls.Config{
+				InsecureSkipVerify: true,
+			}
+		}
 		cli = redis.NewClusterClient(opt)
 	} else {
 		opt := &redis.Options{
@@ -57,7 +62,7 @@ func NewRedisClient(ctx context.Context, config *Config) (redis.UniversalClient,
 			PoolSize:   config.PoolSize,
 			MaxRetries: config.MaxRetry,
 		}
-		if config.SkipTls {
+		if config.Tls {
 			opt.TLSConfig = &tls.Config{
 				InsecureSkipVerify: true,
 			}
