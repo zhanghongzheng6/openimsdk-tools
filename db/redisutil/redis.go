@@ -24,14 +24,23 @@ import (
 // Config defines the configuration parameters for a Redis client, including
 // options for both single-node and cluster mode connections.
 type Config struct {
-	ClusterMode bool     // Whether to use Redis in cluster mode.
-	Address     []string // List of Redis server addresses (host:port).
-	Username    string   // Username for Redis authentication (Redis 6 ACL).
-	Password    string   // Password for Redis authentication.
-	MaxRetry    int      // Maximum number of retries for a command.
-	DB          int      // Database number to connect to, for non-cluster mode.
-	PoolSize    int      // Number of connections to pool.
-	Tls         bool
+	ClusterMode bool      // Whether to use Redis in cluster mode.
+	Address     []string  // List of Redis server addresses (host:port).
+	Username    string    // Username for Redis authentication (Redis 6 ACL).
+	Password    string    // Password for Redis authentication.
+	MaxRetry    int       // Maximum number of retries for a command.
+	DB          int       // Database number to connect to, for non-cluster mode.
+	PoolSize    int       // Number of connections to pool.
+	TLS         TLSConfig `yaml:"tls"`
+}
+
+type TLSConfig struct {
+	EnableTLS          bool   `yaml:"enableTLS"`
+	CACrt              string `yaml:"caCrt"`
+	ClientCrt          string `yaml:"clientCrt"`
+	ClientKey          string `yaml:"clientKey"`
+	ClientKeyPwd       string `yaml:"clientKeyPwd"`
+	InsecureSkipVerify bool   `yaml:"insecureSkipVerify"`
 }
 
 func NewRedisClient(ctx context.Context, config *Config) (redis.UniversalClient, error) {
@@ -47,9 +56,9 @@ func NewRedisClient(ctx context.Context, config *Config) (redis.UniversalClient,
 			PoolSize:   config.PoolSize,
 			MaxRetries: config.MaxRetry,
 		}
-		if config.Tls {
+		if config.TLS.EnableTLS {
 			opt.TLSConfig = &tls.Config{
-				InsecureSkipVerify: true,
+				InsecureSkipVerify: config.TLS.InsecureSkipVerify,
 			}
 		}
 		cli = redis.NewClusterClient(opt)
@@ -62,9 +71,9 @@ func NewRedisClient(ctx context.Context, config *Config) (redis.UniversalClient,
 			PoolSize:   config.PoolSize,
 			MaxRetries: config.MaxRetry,
 		}
-		if config.Tls {
+		if config.TLS.EnableTLS {
 			opt.TLSConfig = &tls.Config{
-				InsecureSkipVerify: true,
+				InsecureSkipVerify: config.TLS.InsecureSkipVerify,
 			}
 		}
 		cli = redis.NewClient(opt)
