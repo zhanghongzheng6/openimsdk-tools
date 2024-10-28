@@ -189,7 +189,8 @@ func (cw *CloudWatchLogger) log(ctx context.Context, level, msg string, err erro
 			if !ok {
 				key = fmt.Sprintf("invalid_key_%d", i/2)
 			}
-			allKeysAndValues[key] = keysAndValues[i+1]
+			value := formatValue(keysAndValues[i+1])
+			allKeysAndValues[key] = value
 		}
 	} else {
 		fmt.Println("Warning: keysAndValues 数量不成对，忽略未配对的元素")
@@ -228,6 +229,19 @@ func (cw *CloudWatchLogger) log(ctx context.Context, level, msg string, err erro
 		fmt.Println("上传日志到 CloudWatch 失败:", err)
 	} else {
 		cw.nextToken = output.NextSequenceToken
+	}
+}
+
+func formatValue(value interface{}) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case fmt.Stringer: // 支持实现了 String 方法的类型
+		return v.String()
+	case error:
+		return v.Error()
+	default:
+		return fmt.Sprintf("%v", v)
 	}
 }
 
