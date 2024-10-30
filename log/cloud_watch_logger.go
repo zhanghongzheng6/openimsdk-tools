@@ -8,6 +8,7 @@ import (
 	"github.com/openimsdk/tools/mcontext"
 	"go.uber.org/zap/zapcore"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -26,6 +27,10 @@ type CloudWatchLogger struct {
 	name           string
 	callDepth      int
 	isSimplify     bool
+	logBuffer      []types.InputLogEvent
+	mu             sync.Mutex
+	batchSize      int
+	flushTicker    *time.Ticker
 }
 
 // 创建一个 CloudWatchLogger 实例
@@ -47,13 +52,66 @@ func NewCloudWatchLogger(accessKey string, secretKey string, region string, logG
 	if err != nil {
 		return nil, err
 	}
-	return &CloudWatchLogger{
+	logger := &CloudWatchLogger{
 		client:         client,
 		logGroup:       logGroup,
 		level:          logLevelMap[logLevel],
 		logStream:      logStream,
 		additionalData: make(map[string]interface{}),
-	}, nil
+		logBuffer:      []types.InputLogEvent{},
+		batchSize:      200,
+		flushTicker:    time.NewTicker(2 * time.Second),
+	}
+	go logger.startFlushRoutine()
+	return logger, nil
+}
+
+func (cw *CloudWatchLogger) startFlushRoutine() {
+	for {
+		<-cw.flushTicker.C
+		cw.lockFlushLogs() // 在每个定时器周期内尝试发送日志
+	}
+}
+
+func (cw *CloudWatchLogger) lockFlushLogs() {
+	cw.mu.Lock()
+	cw.flushLogs()
+	cw.mu.Unlock()
+}
+
+func (cw *CloudWatchLogger) flushLogs() {
+	if len(cw.logBuffer) == 0 {
+		return // 如果没有日志，直接返回
+	}
+	limit := cw.batchSize
+	if len(cw.logBuffer) < cw.batchSize {
+		limit = len(cw.logBuffer)
+	}
+	batch := cw.logBuffer[:limit]
+
+	go cw.BatchPutLogEvents(batch)
+
+	cw.logBuffer = cw.logBuffer[limit:]
+}
+
+func (cw *CloudWatchLogger) BatchPutLogEvents(logBuffer []types.InputLogEvent) {
+	input := &cloudwatchlogs.PutLogEventsInput{
+		LogGroupName:  aws.String(cw.logGroup),
+		LogStreamName: aws.String(cw.logStream),
+		LogEvents:     logBuffer,
+	}
+
+	// If we have a nextToken, use it
+	if cw.nextToken != nil {
+		input.SequenceToken = cw.nextToken
+	}
+	// Send the log events to CloudWatch Logs
+	output, err := cw.client.PutLogEvents(context.TODO(), input)
+	if err != nil {
+		fmt.Println("上传日志到 CloudWatch 失败:", err)
+	} else {
+		cw.nextToken = output.NextSequenceToken
+	}
 }
 
 func InitCloudWatchLoggerConfig(
@@ -173,6 +231,11 @@ func (cw *CloudWatchLogger) kvAppend(ctx context.Context, keysAndValues []any) [
 
 // 日志发送方法
 func (cw *CloudWatchLogger) log(ctx context.Context, level, msg string, err error, keysAndValues ...any) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Recovered from panic in CloudWatchLogger: %v\n", r)
+		}
+	}()
 
 	keysAndValues = cw.kvAppend(ctx, keysAndValues)
 
@@ -213,23 +276,13 @@ func (cw *CloudWatchLogger) log(ctx context.Context, level, msg string, err erro
 		Timestamp: aws.Int64(time.Now().Unix() * 1000),
 	}
 
-	input := &cloudwatchlogs.PutLogEventsInput{
-		LogGroupName:  aws.String(cw.logGroup),
-		LogStreamName: aws.String(cw.logStream),
-		LogEvents:     []types.InputLogEvent{logEvent},
+	cw.mu.Lock()
+	cw.logBuffer = append(cw.logBuffer, logEvent)
+	if len(cw.logBuffer) > cw.batchSize {
+		fmt.Println("上传日志到 CloudWatch size:", len(cw.logBuffer))
+		cw.flushLogs()
 	}
-	// If we have a nextToken, use it
-	if cw.nextToken != nil {
-		input.SequenceToken = cw.nextToken
-	}
-
-	// Send the log event to CloudWatch Logs
-	output, err := cw.client.PutLogEvents(ctx, input)
-	if err != nil {
-		fmt.Println("上传日志到 CloudWatch 失败:", err)
-	} else {
-		cw.nextToken = output.NextSequenceToken
-	}
+	cw.mu.Unlock()
 }
 
 func formatValue(value interface{}) string {
