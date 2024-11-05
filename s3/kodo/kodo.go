@@ -40,8 +40,8 @@ import (
 )
 
 const (
-	minPartSize = 1024 * 1024 * 1          // 1MB
-	maxPartSize = 1024 * 1024 * 1024 * 100 // 5GB
+	minPartSize = 1024 * 1024 * 5         // 1MB
+	maxPartSize = 1024 * 1024 * 1024 * 50 // 5GB
 	maxNumSize  = 10000
 )
 
